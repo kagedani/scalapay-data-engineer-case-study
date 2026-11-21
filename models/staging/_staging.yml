@@ -1,0 +1,125 @@
+version: 2
+
+# Tests from staging onwards run with severity error (project default):
+# they guarantee the cleaning worked. Source-level tests (warn) document the raw issues.
+
+models:
+  - name: stg_customers
+    description: >
+      Customer events, one row per event. Tier normalised to lower case,
+      exact duplicates removed, conflicting versions resolved by latest updated_at.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ['customer_id', 'updated_at']
+    columns:
+      - name: customer_event_id
+        description: Event identifier.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        description: Customer identifier.
+        data_tests: [not_null]
+      - name: country
+        description: Customer country, upper-cased, inner spaces replaced by '_'.
+        data_tests: [not_null]
+      - name: email
+        description: Customer email, lower-cased.
+        data_tests: [not_null]
+      - name: subs_tier
+        description: Subscription tier effective from updated_at.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['free', 'premium', 'enterprise']
+      - name: updated_at
+        description: Business timestamp of the event.
+        data_tests: [not_null]
+
+  - name: stg_orders
+    description: >
+      Order lifecycle events, one row per order and stage. Exact duplicates removed,
+      conflicting versions resolved by latest updated_at.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ['order_id', 'order_status']
+    columns:
+      - name: order_event_id
+        description: Event identifier.
+        data_tests: [unique, not_null]
+      - name: order_id
+        description: Order identifier.
+        data_tests: [not_null]
+      - name: product_id
+        description: Ordered product.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: customer_id
+        description: Customer who placed the order.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: shipping_company_id
+        description: Assigned shipping company.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_shipping_companies')
+                field: shipping_company_id
+      - name: order_status
+        description: Stage reached by the order with this event.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['created', 'payment', 'fulfilled']
+      - name: dropoff_reason
+        description: Why the order stopped at this stage (lower case, spaces as '_'); null if it moved on or was fulfilled.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['customer_abandoned', 'card_declined', 'inventory_shortage', 'lost_in_shipping']
+      - name: updated_at
+        description: Business timestamp of the stage.
+        data_tests: [not_null]
+
+  - name: stg_products
+    description: Product catalog, one row per product, category normalised.
+    columns:
+      - name: product_id
+        description: Product identifier.
+        data_tests: [unique, not_null]
+      - name: price
+        description: Current price. No history is available.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+      - name: category
+        description: Normalised category (upper case, spaces as '_'); 'UNDEFINED' when missing in the source.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['BOOKS', 'CLOTHING', 'ELECTRONICS', 'HOME_&_GARDEN', 'SPORTS', 'TOYS', 'UNDEFINED']
+
+  - name: stg_shipping_companies
+    description: Shipping companies, one row per company.
+    columns:
+      - name: shipping_company_id
+        description: Shipping company identifier.
+        data_tests: [unique, not_null]
+      - name: shipping_company_name
+        description: Shipping company name.
+        data_tests: [unique, not_null]

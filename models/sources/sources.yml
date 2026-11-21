@@ -14,6 +14,13 @@ sources:
         columns:
           - name: event_id
             description: Identifier of the customer event.
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
+              - no_conflicting_duplicates:
+                  config:
+                    severity: warn
           - name: customer_id
             description: Customer identifier. Not unique (one row per event).
           - name: country
@@ -22,6 +29,12 @@ sources:
             description: Customer email.
           - name: subs_tier
             description: Subscription tier as sent by the source (inconsistent casing and whitespace).
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ['free', 'premium', 'enterprise']
+                  config:
+                    severity: warn
           - name: updated_at
             description: Business timestamp of the event.
 
@@ -32,6 +45,13 @@ sources:
         columns:
           - name: event_id
             description: Identifier of the order event.
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
+              - no_conflicting_duplicates:
+                  config:
+                    severity: warn
           - name: order_id
             description: Order identifier. Not unique (one row per stage).
           - name: product_id
@@ -52,15 +72,35 @@ sources:
         columns:
           - name: id
             description: Product identifier.
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
+              - no_conflicting_duplicates:
+                  config:
+                    severity: warn
           - name: price
             description: Current product price.
           - name: category
             description: Product category as sent by the source (inconsistent spelling, some nulls).
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+              - accepted_values:
+                  arguments:
+                    values: ['Books', 'Clothing', 'Electronics', 'Home & Garden', 'Toys']
+                  config:
+                    severity: warn
 
       - name: shipping_company
         description: Shipping company reference data.
         columns:
           - name: id
             description: Shipping company identifier.
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
           - name: name
             description: Shipping company name.
