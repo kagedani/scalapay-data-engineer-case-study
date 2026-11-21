@@ -2,10 +2,65 @@ version: 2
 
 sources:
   - name: raw_data
-    description: Raw data from CSV files
-    schema: public_raw_data
+    description: >
+      Raw case-study CSVs loaded as dbt seeds into the `raw_data` schema.
+      Loaded as-is: no cleaning happens before staging.
+    schema: raw_data
     tables:
       - name: customers
+        description: >
+          Customer profile events. One row per change; a new row is emitted when the
+          subscription tier changes. Contains exact duplicate rows.
+        columns:
+          - name: event_id
+            description: Identifier of the customer event.
+          - name: customer_id
+            description: Customer identifier. Not unique (one row per event).
+          - name: country
+            description: Customer country.
+          - name: email
+            description: Customer email.
+          - name: subs_tier
+            description: Subscription tier as sent by the source (inconsistent casing and whitespace).
+          - name: updated_at
+            description: Business timestamp of the event.
+
       - name: orders
+        description: >
+          Order lifecycle events (created -> payment -> fulfilled). One row per stage
+          reached. `dropoff` is populated on the last stage reached when the order failed.
+        columns:
+          - name: event_id
+            description: Identifier of the order event.
+          - name: order_id
+            description: Order identifier. Not unique (one row per stage).
+          - name: product_id
+            description: Ordered product (one product per order, no quantity).
+          - name: customer_id
+            description: Customer who placed the order.
+          - name: shipping_company_id
+            description: Shipping company assigned to the order.
+          - name: status
+            description: Stage reached (created, payment, fulfilled).
+          - name: updated_at
+            description: Business timestamp of the stage.
+          - name: dropoff
+            description: Reason the order stopped at this stage, if it did.
+
       - name: products
+        description: Product catalog. No timestamp, so no history is available.
+        columns:
+          - name: id
+            description: Product identifier.
+          - name: price
+            description: Current product price.
+          - name: category
+            description: Product category as sent by the source (inconsistent spelling, some nulls).
+
       - name: shipping_company
+        description: Shipping company reference data.
+        columns:
+          - name: id
+            description: Shipping company identifier.
+          - name: name
+            description: Shipping company name.

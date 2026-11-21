@@ -22,11 +22,11 @@ ENV PATH="/root/.local/bin:$PATH"
 WORKDIR /app
 
 # Copy Poetry configuration files
-COPY pyproject.toml poetry.toml ./
+COPY pyproject.toml poetry.toml poetry.lock ./
 
 # Configure Poetry and install dependencies
 RUN poetry config virtualenvs.create false \
-    && poetry install --only=main
+    && poetry install --with dev
 
 # Copy the rest of the application
 COPY . .

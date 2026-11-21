@@ -7,16 +7,24 @@ profile: 'product_funnel_analysis'
 
 # These configurations specify where dbt should look for different types of files.
 model-paths: ["models"]
+analysis-paths: ["analyses"]
 test-paths: ["tests"]
 seed-paths: ["data"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
-target-path: "target"  
-clean-targets:         
+target-path: "target"
+clean-targets:
   - "target"
   - "dbt_packages"
 
+vars:
+  # fct_orders incremental runs reprocess every order with an event newer than
+  # max(last_event_at) - lookback, so late-arriving events inside the window are picked up.
+  fct_orders_lookback_days: 3
+  # Minimum days a subscription period must overlap the observation window
+  # to be used in tier-level comparisons (is_comparable flag).
+  min_exposure_days: 30
 
 # Configuring models
 models:
@@ -28,12 +36,12 @@ models:
         node_color: "lightblue"
     star:
       +schema: star
-      +materialized: view
+      +materialized: table
       +docs:
         node_color: "blue"
     mart:
       +schema: mart
-      +materialized: view
+      +materialized: table
       +docs:
         node_color: "darkblue"
 
@@ -41,7 +49,16 @@ seeds:
   product_funnel_analysis:
     +quote_columns: false
     +schema: raw_data
+    customers:
+      +column_types:
+        updated_at: timestamp
+    orders:
+      +column_types:
+        updated_at: timestamp
+    products:
+      +column_types:
+        price: numeric(10, 2)
 
-tests:
+data_tests:
   product_funnel_analysis:
     +store_failures: true
