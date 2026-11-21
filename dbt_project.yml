@@ -20,9 +20,9 @@ clean-targets:
 
 vars:
   # fct_orders incremental runs rebuild every order with an event at or after
-  # max(last_event_at) - lookback. Default 0: a new source file is assumed not to carry
-  # events older than the previous maximum. Raise it to tolerate late events,
-  # or run --full-refresh to reprocess everything.
+  # max(last_event_at) - lookback. Default 0: the cumulative orders file is assumed
+  # not to add events older than the previous maximum (assert_fct_orders_in_sync_with_staging
+  # flags them). Raise it to tolerate late events, or run --full-refresh.
   fct_orders_lookback_days: 0
   # Minimum days a subscription period must overlap the observation window
   # to be used in tier-level comparisons (is_comparable flag).

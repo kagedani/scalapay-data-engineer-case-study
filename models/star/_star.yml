@@ -2,10 +2,10 @@ version: 2
 
 # Every star model has an enforced contract: column names and types are checked
 # at build time, and not_null / primary_key constraints are created in Postgres.
-# Strings are varchar(n) with a documented maximum length. Full-rebuild tables do not
-# cast to varchar(n): an explicit cast truncates silently in Postgres, while the insert
-# into the contracted table fails on an over-long value. fct_orders is the exception
-# (see the note in the model): its on_schema_change='fail' check needs matching types.
+# Dimension strings are varchar(n), not cast in the query: an explicit cast truncates
+# silently in Postgres, while the insert into the contracted table fails on an
+# over-long value. fct_orders keeps strings as text (see the note in the model):
+# with on_schema_change='fail' a varchar(n) column would need that silent cast.
 
 models:
   - name: dim_customers
@@ -155,7 +155,10 @@ models:
       Accumulating snapshot of the order funnel, one row per order. Incremental
       (delete+insert on order_id): each run rebuilds, from all their events, the orders
       with an event at or after max(last_event_at) minus `fct_orders_lookback_days`
-      (default 0). Late events older than that need --full-refresh.
+      (default 0). Assumes a cumulative orders file; late events older than the
+      watermark are flagged by assert_fct_orders_in_sync_with_staging and need a
+      larger lookback or --full-refresh. No amount: the GMV uses the current product
+      price, joined in the marts.
       Deliberately no foreign key to dim_customer_subscriptions: the tier at order time
       is resolved point-in-time in the marts, so late tier events cannot leave stale rows here.
     config:
@@ -213,7 +216,7 @@ models:
         description: Time of the latest event of the order. Watermark of the incremental logic.
         constraints: [{type: not_null}]
       - name: last_status
-        data_type: varchar(20)
+        data_type: text
         description: Last stage reached.
         constraints: [{type: not_null}]
         data_tests:
@@ -221,13 +224,13 @@ models:
               arguments:
                 values: ['created', 'payment', 'fulfilled']
       - name: dropoff_stage
-        data_type: varchar(20)
+        data_type: text
         description: Stage where the order stopped; null unless the order was dropped.
       - name: dropoff_reason
-        data_type: varchar(50)
-        description: Why the order stopped; null unless the order was dropped.
+        data_type: text
+        description: Why the order stopped; null unless the order was dropped. Free-text note, new values are legitimate.
       - name: order_outcome
-        data_type: varchar(20)
+        data_type: text
         description: "`fulfilled`, `dropped`, or `in_progress` (not fulfilled and no dropoff yet)."
         constraints: [{type: not_null}]
         data_tests:
@@ -240,10 +243,6 @@ models:
       - name: hours_to_fulfillment
         data_type: numeric(10, 2)
         description: Hours from payment to fulfilled.
-      - name: order_amount
-        data_type: numeric(10, 2)
-        description: Current price of the ordered product (one product per order, no quantity).
-        constraints: [{type: not_null}]
       - name: insert_ts
         data_type: timestamp
         description: Start of the dbt run that first wrote the order. Kept when the order is rewritten.

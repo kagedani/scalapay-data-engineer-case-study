@@ -85,9 +85,12 @@ models:
       - name: dropoff_reason
         description: Why the order stopped at this stage (lower case, spaces as '_'); null if it moved on or was fulfilled.
         data_tests:
+          # free-text note: a new reason is legitimate, flagged as a warning only
           - accepted_values:
               arguments:
                 values: ['customer_abandoned', 'card_declined', 'inventory_shortage', 'lost_in_shipping']
+              config:
+                severity: warn
       - name: updated_at
         description: Business timestamp of the stage.
         data_tests: [not_null]

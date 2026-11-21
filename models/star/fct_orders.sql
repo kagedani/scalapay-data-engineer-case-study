@@ -7,12 +7,10 @@
     )
 }}
 
--- on_schema_change='fail': any change of columns or types needs a deliberate
--- --full-refresh. The check compares this query with the existing table, so string
--- columns are cast to the contracted varchar(n) here (text would count as a type change).
--- An explicit varchar(n) cast truncates silently in Postgres: it is safe because these
--- columns only carry the closed value sets tested with severity error in stg_orders
--- (order_status, dropoff_reason) or literals defined below.
+-- on_schema_change='fail': adding, removing or retyping a column stops incremental
+-- runs until a deliberate --full-refresh. String columns stay text: a varchar(n)
+-- column would need an explicit cast here (text does not fit varchar(n)), and explicit
+-- casts truncate silently in Postgres. Their domain is checked by accepted_values.
 
 -- Accumulating snapshot, one row per order: the event stream of stg_orders
 -- pivoted into one timestamp per stage.
@@ -22,9 +20,10 @@
 -- then rebuild those orders from ALL their events and replace them
 -- (delete+insert on order_id; Postgres 13 has no MERGE).
 --
--- Assumption (default lookback 0): a new source file does not carry events older
--- than the previous maximum. Late events break it: raise the lookback or run
--- --full-refresh.
+-- Assumptions: the orders file is cumulative (full event history, not a delta),
+-- and with the default lookback 0 it adds no event older than the previous maximum.
+-- A late event on a loaded order is flagged by assert_fct_orders_in_sync_with_staging:
+-- raise the lookback or run --full-refresh.
 
 with order_events as (
 
@@ -80,12 +79,6 @@ last_event as (
     ) as ranked
     where recency_rank = 1
 
-),
-
-products as (
-
-    select * from {{ ref('stg_products') }}
-
 )
 
 select
@@ -98,19 +91,17 @@ select
     pivoted.paid_at,
     pivoted.fulfilled_at,
     pivoted.last_event_at,
-    last_event.last_status::varchar(20) as last_status,
-    (case when last_event.dropoff_reason is not null then last_event.last_status end)::varchar(20) as dropoff_stage,
-    last_event.dropoff_reason::varchar(50) as dropoff_reason,
-    (case
+    last_event.last_status,
+    case when last_event.dropoff_reason is not null then last_event.last_status end as dropoff_stage,
+    last_event.dropoff_reason,
+    case
         when pivoted.fulfilled_at is not null then 'fulfilled'
         when last_event.dropoff_reason is not null then 'dropped'
         else 'in_progress'
-    end)::varchar(20) as order_outcome,
+    end::text as order_outcome,
     -- extract() returns double precision on Postgres 13: cast before rounding
     round((extract(epoch from pivoted.paid_at - pivoted.created_at) / 3600)::numeric, 2)::numeric(10, 2) as hours_to_payment,
     round((extract(epoch from pivoted.fulfilled_at - pivoted.paid_at) / 3600)::numeric, 2)::numeric(10, 2) as hours_to_fulfillment,
-    -- one product per order and no quantity: the amount is the current product price
-    products.price as order_amount,
     {% if is_incremental() -%}
     coalesce(existing.insert_ts, {{ audit_run_ts() }}) as insert_ts,
     {%- else -%}
@@ -120,8 +111,6 @@ select
 from pivoted
 inner join last_event
     on pivoted.order_id = last_event.order_id
-left join products
-    on pivoted.product_id = products.product_id
 {% if is_incremental() -%}
 left join {{ this }} as existing
     on pivoted.order_id = existing.order_id
