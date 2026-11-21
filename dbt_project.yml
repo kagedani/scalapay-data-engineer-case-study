@@ -1,0 +1,47 @@
+name: 'product_funnel_analysis'
+version: '1.0.0'
+config-version: 2
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'product_funnel_analysis'
+
+# These configurations specify where dbt should look for different types of files.
+model-paths: ["models"]
+test-paths: ["tests"]
+seed-paths: ["data"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"  
+clean-targets:         
+  - "target"
+  - "dbt_packages"
+
+
+# Configuring models
+models:
+  product_funnel_analysis:
+    staging:
+      +schema: staging
+      +materialized: view
+      +docs:
+        node_color: "lightblue"
+    star:
+      +schema: star
+      +materialized: view
+      +docs:
+        node_color: "blue"
+    mart:
+      +schema: mart
+      +materialized: view
+      +docs:
+        node_color: "darkblue"
+
+seeds:
+  product_funnel_analysis:
+    +quote_columns: false
+    +schema: raw_data
+
+tests:
+  product_funnel_analysis:
+    +store_failures: true

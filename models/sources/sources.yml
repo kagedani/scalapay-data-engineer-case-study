@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: raw_data
+    description: Raw data from CSV files
+    schema: public_raw_data
+    tables:
+      - name: customers
+      - name: orders
+      - name: products
+      - name: shipping_company

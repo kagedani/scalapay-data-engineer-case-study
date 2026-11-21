@@ -1,0 +1,13 @@
+product_funnel_analysis:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: postgres
+      user: postgres
+      password: postgres
+      port: 5432
+      dbname: funnel_analysis
+      schema: public
+      threads: 4
+      keepalives_idle: 0
