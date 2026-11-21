@@ -1,0 +1,254 @@
+version: 2
+
+# Every star model has an enforced contract: column names and types are checked
+# at build time, and not_null / primary_key constraints are created in Postgres.
+# Strings are varchar(n) with a documented maximum length. Full-rebuild tables do not
+# cast to varchar(n): an explicit cast truncates silently in Postgres, while the insert
+# into the contracted table fails on an over-long value. fct_orders is the exception
+# (see the note in the model): its on_schema_change='fail' check needs matching types.
+
+models:
+  - name: dim_customers
+    description: >
+      One row per customer (type 1). Country and email never change in the source;
+      the subscription tier history is in dim_customer_subscriptions.
+    config:
+      contract: {enforced: true}
+    columns:
+      - name: customer_id
+        data_type: integer
+        description: Customer identifier.
+        constraints:
+          - type: primary_key
+        data_tests: [unique, not_null]
+      - name: email
+        data_type: varchar(254)
+        description: Customer email, lower-cased.
+        constraints: [{type: not_null}]
+      - name: country
+        data_type: varchar(50)
+        description: Customer country, upper-cased, inner spaces as '_'.
+        constraints: [{type: not_null}]
+      - name: first_seen_at
+        data_type: timestamp
+        description: First customer event, used as a proxy for the registration date.
+        constraints: [{type: not_null}]
+      - name: current_subs_tier
+        data_type: varchar(20)
+        description: Tier of the most recent customer event.
+        constraints: [{type: not_null}]
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['free', 'premium', 'enterprise']
+      - name: insert_ts
+        data_type: timestamp
+        description: Start of the dbt run that first wrote the row.
+      - name: last_update_ts
+        data_type: timestamp
+        description: Start of the dbt run that last wrote the row.
+
+  - name: dim_customer_subscriptions
+    description: >
+      SCD2 of the subscription tier (mini-dimension): one row per customer and tier
+      period, half-open interval [valid_from, valid_to). The open period has
+      valid_to = 9999-12-31. Built from the source event history, not from dbt snapshots.
+    config:
+      contract: {enforced: true}
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ['customer_id', 'valid_from']
+    columns:
+      - name: customer_subscription_sk
+        data_type: varchar(32)
+        description: Surrogate key, hash of customer_id and valid_from.
+        constraints:
+          - type: primary_key
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_type: integer
+        description: Customer identifier.
+        constraints: [{type: not_null}]
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
+      - name: subs_tier
+        data_type: varchar(20)
+        description: Tier valid in the period.
+        constraints: [{type: not_null}]
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['free', 'premium', 'enterprise']
+      - name: valid_from
+        data_type: timestamp
+        description: Start of the period (inclusive).
+        constraints: [{type: not_null}]
+      - name: valid_to
+        data_type: timestamp
+        description: End of the period (exclusive); 9999-12-31 for the current period.
+        constraints: [{type: not_null}]
+      - name: is_current
+        data_type: boolean
+        description: True for the open period.
+        constraints: [{type: not_null}]
+      - name: insert_ts
+        data_type: timestamp
+        description: Start of the dbt run that first wrote the row.
+      - name: last_update_ts
+        data_type: timestamp
+        description: Start of the dbt run that last wrote the row.
+
+  - name: dim_products
+    description: One row per product, with its current price and normalised category.
+    config:
+      contract: {enforced: true}
+    columns:
+      - name: product_id
+        data_type: integer
+        description: Product identifier.
+        constraints:
+          - type: primary_key
+        data_tests: [unique, not_null]
+      - name: price
+        data_type: numeric(10, 2)
+        description: Current price. No price history is available.
+        constraints: [{type: not_null}]
+      - name: category
+        data_type: varchar(50)
+        description: Normalised category; 'UNDEFINED' when missing in the source.
+        constraints: [{type: not_null}]
+      - name: insert_ts
+        data_type: timestamp
+        description: Start of the dbt run that first wrote the row.
+      - name: last_update_ts
+        data_type: timestamp
+        description: Start of the dbt run that last wrote the row.
+
+  - name: dim_shipping_companies
+    description: One row per shipping company.
+    config:
+      contract: {enforced: true}
+    columns:
+      - name: shipping_company_id
+        data_type: integer
+        description: Shipping company identifier.
+        constraints:
+          - type: primary_key
+        data_tests: [unique, not_null]
+      - name: shipping_company_name
+        data_type: varchar(100)
+        description: Shipping company name.
+        constraints: [{type: not_null}]
+      - name: insert_ts
+        data_type: timestamp
+        description: Start of the dbt run that first wrote the row.
+      - name: last_update_ts
+        data_type: timestamp
+        description: Start of the dbt run that last wrote the row.
+
+  - name: fct_orders
+    description: >
+      Accumulating snapshot of the order funnel, one row per order. Incremental
+      (delete+insert on order_id): each run rebuilds, from all their events, the orders
+      with an event at or after max(last_event_at) minus `fct_orders_lookback_days`
+      (default 0). Late events older than that need --full-refresh.
+      Deliberately no foreign key to dim_customer_subscriptions: the tier at order time
+      is resolved point-in-time in the marts, so late tier events cannot leave stale rows here.
+    config:
+      contract: {enforced: true}
+    columns:
+      - name: order_id
+        data_type: integer
+        description: Order identifier.
+        constraints:
+          - type: primary_key
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_type: integer
+        description: Customer who placed the order.
+        constraints: [{type: not_null}]
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
+      - name: product_id
+        data_type: integer
+        description: Ordered product.
+        constraints: [{type: not_null}]
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_id
+      - name: shipping_company_id
+        data_type: integer
+        description: Assigned shipping company.
+        constraints: [{type: not_null}]
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_shipping_companies')
+                field: shipping_company_id
+      - name: created_at
+        data_type: timestamp
+        description: Time of the `created` event.
+        constraints: [{type: not_null}]
+      - name: creation_date_code
+        data_type: integer
+        description: Creation date as an integer YYYYMMDD (e.g. 20250906), the usual date key for a date dimension.
+        constraints: [{type: not_null}]
+      - name: paid_at
+        data_type: timestamp
+        description: Time of the `payment` event (successful payment); null if never reached.
+      - name: fulfilled_at
+        data_type: timestamp
+        description: Time of the `fulfilled` event; null if never reached.
+      - name: last_event_at
+        data_type: timestamp
+        description: Time of the latest event of the order. Watermark of the incremental logic.
+        constraints: [{type: not_null}]
+      - name: last_status
+        data_type: varchar(20)
+        description: Last stage reached.
+        constraints: [{type: not_null}]
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['created', 'payment', 'fulfilled']
+      - name: dropoff_stage
+        data_type: varchar(20)
+        description: Stage where the order stopped; null unless the order was dropped.
+      - name: dropoff_reason
+        data_type: varchar(50)
+        description: Why the order stopped; null unless the order was dropped.
+      - name: order_outcome
+        data_type: varchar(20)
+        description: "`fulfilled`, `dropped`, or `in_progress` (not fulfilled and no dropoff yet)."
+        constraints: [{type: not_null}]
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['fulfilled', 'dropped', 'in_progress']
+      - name: hours_to_payment
+        data_type: numeric(10, 2)
+        description: Hours from created to payment.
+      - name: hours_to_fulfillment
+        data_type: numeric(10, 2)
+        description: Hours from payment to fulfilled.
+      - name: order_amount
+        data_type: numeric(10, 2)
+        description: Current price of the ordered product (one product per order, no quantity).
+        constraints: [{type: not_null}]
+      - name: insert_ts
+        data_type: timestamp
+        description: Start of the dbt run that first wrote the order. Kept when the order is rewritten.
+        constraints: [{type: not_null}]
+      - name: last_update_ts
+        data_type: timestamp
+        description: Start of the dbt run that last wrote the order.
+        constraints: [{type: not_null}]

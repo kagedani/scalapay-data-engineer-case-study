@@ -19,9 +19,11 @@ clean-targets:
   - "dbt_packages"
 
 vars:
-  # fct_orders incremental runs reprocess every order with an event newer than
-  # max(last_event_at) - lookback, so late-arriving events inside the window are picked up.
-  fct_orders_lookback_days: 3
+  # fct_orders incremental runs rebuild every order with an event at or after
+  # max(last_event_at) - lookback. Default 0: a new source file is assumed not to carry
+  # events older than the previous maximum. Raise it to tolerate late events,
+  # or run --full-refresh to reprocess everything.
+  fct_orders_lookback_days: 0
   # Minimum days a subscription period must overlap the observation window
   # to be used in tier-level comparisons (is_comparable flag).
   min_exposure_days: 30
