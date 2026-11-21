@@ -1,0 +1,190 @@
+version: 2
+
+# Marts are full-rebuild tables of business aggregates, without technical columns.
+# GMV = current price of the product of fulfilled orders (no quantity, no price
+# history); lost GMV = same for dropped orders. Tier "at order time" comes from the
+# point-in-time join in macros/mart_helpers.sql.
+
+models:
+  - name: order_funnel
+    description: Funnel conversion by monthly cohort (month of order creation) and step.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ['cohort_month', 'step']
+    columns:
+      - name: cohort_month
+        description: Month of order creation.
+        data_tests: [not_null]
+      - name: step_order
+        description: 1 created, 2 payment, 3 fulfilled.
+      - name: step
+        description: Funnel step.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['created', 'payment', 'fulfilled']
+      - name: orders_reached
+        description: Orders of the cohort that reached the step.
+      - name: step_conversion_rate
+        description: Orders reaching the step over orders reaching the previous step (1 for created).
+      - name: cumulative_conversion_rate
+        description: Orders reaching the step over created orders of the cohort.
+      - name: is_partial_month
+        description: True for the first and last month of the observation window, which may be incomplete.
+
+  - name: dropoff_analysis
+    description: >
+      Dropped orders and lost GMV by dropoff stage and reason, broken down by tier at
+      order time, product category and shipping company. Aggregate up as needed.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ['dropoff_stage', 'dropoff_reason', 'subs_tier_at_order', 'category', 'shipping_company_name']
+    columns:
+      - name: dropoff_stage
+        description: Stage where the orders stopped.
+        data_tests: [not_null]
+      - name: dropoff_reason
+        description: Why the orders stopped.
+        data_tests: [not_null]
+      - name: subs_tier_at_order
+        description: Customer tier when the order was created (point-in-time).
+        data_tests: [not_null]
+      - name: category
+        description: Product category.
+      - name: shipping_company_name
+        description: Assigned shipping company.
+      - name: dropped_orders
+        description: Number of dropped orders.
+      - name: lost_gmv
+        description: Current price of the products of the dropped orders.
+
+  - name: category_performance
+    description: Order volumes, conversion and GMV by product category and month of creation.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ['category', 'order_month']
+    columns:
+      - name: category
+        description: Normalised product category.
+        data_tests: [not_null]
+      - name: order_month
+        description: Month of order creation.
+        data_tests: [not_null]
+      - name: fulfillment_rate
+        description: Fulfilled over created orders.
+      - name: gmv
+        description: GMV of fulfilled orders.
+      - name: lost_gmv
+        description: Value of dropped orders.
+
+  - name: tier_behavior
+    description: >
+      Ordering behaviour by subscription tier at order time. Conversion, dropoff and
+      GMV use every order; per-30-day metrics use comparable periods only.
+    columns:
+      - name: subs_tier
+        description: Tier at order time.
+        data_tests: [unique, not_null]
+      - name: ordering_customers
+        description: Customers with at least one order while in the tier.
+      - name: payment_rate
+        description: Paid over created orders.
+      - name: fulfillment_rate
+        description: Fulfilled over paid orders.
+      - name: overall_conversion_rate
+        description: Fulfilled over created orders.
+      - name: comparable_periods
+        description: Subscription periods in the tier with at least `min_exposure_days` of exposure.
+      - name: comparable_exposure_days
+        description: Total exposure of the comparable periods, in days.
+      - name: orders_per_30_days
+        description: Orders per 30 days of exposure, comparable periods only.
+      - name: gmv_per_30_days
+        description: GMV per 30 days of exposure, comparable periods only.
+
+  - name: customer_lifetime_value
+    description: >
+      Historical customer lifetime value, one row per customer with the current tier.
+      CLV = GMV of fulfilled orders. Customers without orders have zero value.
+    columns:
+      - name: customer_id
+        description: Customer identifier.
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
+      - name: current_subs_tier
+        description: Current tier.
+      - name: tier_changes
+        description: Number of tier changes in the customer history.
+      - name: historical_clv
+        description: GMV of the customer's fulfilled orders.
+        data_tests: [not_null]
+      - name: avg_fulfilled_order_value
+        description: Historical CLV over fulfilled orders; null without fulfilled orders.
+
+  - name: customer_subscription_periods
+    description: >
+      Customer value per subscription period, with exposure in the observation window
+      (first to last order creation). A period overlapping the window is shown even
+      with zero orders; a period entirely outside it is excluded. Periods with at
+      least `min_exposure_days` of exposure are comparable; they feed the tier
+      comparison and the before/after-upgrade reading.
+    columns:
+      - name: customer_subscription_sk
+        description: Subscription period (dim_customer_subscriptions).
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customer_subscriptions')
+                field: customer_subscription_sk
+      - name: period_number
+        description: Position of the period in the customer history (1 = first).
+      - name: previous_subs_tier
+        description: Tier of the previous period; null for the first one.
+      - name: tier_change
+        description: How the period started.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['initial', 'upgrade', 'downgrade']
+      - name: exposure_start
+        description: Start of the overlap between the period and the observation window.
+      - name: exposure_end
+        description: End of the overlap between the period and the observation window.
+      - name: exposure_days
+        description: Length of the overlap in days; always positive.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false
+      - name: is_comparable
+        description: exposure_days >= `min_exposure_days`.
+      - name: orders_per_30_days
+        description: Orders per 30 days of exposure.
+      - name: gmv_per_30_days
+        description: GMV per 30 days of exposure.
+
+  - name: shipping_performance
+    description: >
+      Shipping company performance: time from payment to fulfilment and rate of
+      orders lost in shipping, the dropoff attributable to the carrier.
+    columns:
+      - name: shipping_company_id
+        description: Shipping company identifier.
+        data_tests: [unique, not_null]
+      - name: lost_in_shipping_rate
+        description: Orders lost in shipping over paid orders.
+      - name: median_hours_to_fulfillment
+        description: Median hours from payment to fulfilment (fulfilled orders).
+      - name: p90_hours_to_fulfillment
+        description: 90th percentile of hours from payment to fulfilment.
