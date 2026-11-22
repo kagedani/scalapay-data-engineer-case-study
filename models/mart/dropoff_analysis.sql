@@ -4,6 +4,7 @@
 -- Fine grain on purpose: consumers aggregate up to the breakdown they need.
 
 select
+    date_trunc('month', orders.created_at)::date as cohort_month,
     orders.dropoff_stage,
     orders.dropoff_reason,
     subscriptions.subs_tier as subs_tier_at_order,
@@ -18,4 +19,4 @@ inner join {{ ref('dim_products') }} as products
 inner join {{ ref('dim_shipping_companies') }} as shipping
     on orders.shipping_company_id = shipping.shipping_company_id
 where orders.order_outcome = 'dropped'
-group by 1, 2, 3, 4, 5
+group by 1, 2, 3, 4, 5, 6

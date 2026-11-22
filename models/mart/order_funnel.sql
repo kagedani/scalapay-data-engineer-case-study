@@ -47,6 +47,8 @@ select
     steps.step_order,
     steps.step,
     steps.orders_reached,
+    steps.previous_step_orders,
+    steps.created_orders,
     round(steps.orders_reached::numeric / nullif(steps.previous_step_orders, 0), 4) as step_conversion_rate,
     round(steps.orders_reached::numeric / nullif(steps.created_orders, 0), 4) as cumulative_conversion_rate,
     steps.cohort_month in (

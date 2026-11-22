@@ -26,6 +26,14 @@ models:
                 values: ['created', 'payment', 'fulfilled']
       - name: orders_reached
         description: Orders of the cohort that reached the step.
+      - name: previous_step_orders
+        description: >
+          Orders of the cohort that reached the previous step (created orders for the
+          created step). Sum it across cohorts to get the overall step conversion.
+      - name: created_orders
+        description: >
+          Created orders of the cohort. Sum it across cohorts to get the overall
+          cumulative conversion.
       - name: step_conversion_rate
         description: Orders reaching the step over orders reaching the previous step (1 for created).
       - name: cumulative_conversion_rate
@@ -35,13 +43,17 @@ models:
 
   - name: dropoff_analysis
     description: >
-      Dropped orders and lost GMV by dropoff stage and reason, broken down by tier at
-      order time, product category and shipping company. Aggregate up as needed.
+      Dropped orders and lost GMV by dropoff stage and reason, broken down by cohort
+      month, tier at order time, product category and shipping company. Aggregate up
+      as needed.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
-            combination_of_columns: ['dropoff_stage', 'dropoff_reason', 'subs_tier_at_order', 'category', 'shipping_company_name']
+            combination_of_columns: ['cohort_month', 'dropoff_stage', 'dropoff_reason', 'subs_tier_at_order', 'category', 'shipping_company_name']
     columns:
+      - name: cohort_month
+        description: Month of order creation, as in order_funnel.
+        data_tests: [not_null]
       - name: dropoff_stage
         description: Stage where the orders stopped.
         data_tests: [not_null]
