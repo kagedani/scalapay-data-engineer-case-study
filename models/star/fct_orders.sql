@@ -15,10 +15,10 @@
 -- Accumulating snapshot, one row per order: the event stream of stg_orders
 -- pivoted into one timestamp per stage.
 --
--- Incremental logic: find the orders with at least one event at or after the
--- watermark (max(last_event_at) already loaded, minus `fct_orders_lookback_days`),
--- then rebuild those orders from ALL their events and replace them
--- (delete+insert on order_id; Postgres 13 has no MERGE).
+-- Incremental logic: rebuild every order from ALL its events, keep only the orders
+-- whose last event is at or after the watermark (max(last_event_at) already loaded,
+-- minus `fct_orders_lookback_days`), and replace them (delete+insert on order_id;
+-- Postgres 13 has no MERGE). Filtering after the pivot reads stg_orders once.
 --
 -- Assumptions: the orders file is cumulative (full event history, not a delta),
 -- and with the default lookback 0 it adds no event older than the previous maximum.
@@ -29,22 +29,11 @@ with order_events as (
 
     select * from {{ ref('stg_orders') }}
 
-    {% if is_incremental() %}
-    where order_id in (
-        select order_id
-        from {{ ref('stg_orders') }}
-        where updated_at >= (
-            select coalesce(max(last_event_at), '1900-01-01'::timestamp)
-                - interval '{{ var("fct_orders_lookback_days") }} days'
-            from {{ this }}
-        )
-    )
-    {% endif %}
-
 ),
 
--- product, customer and shipping company are constant within an order
--- (checked by a singular test), so max() just picks the single value.
+-- One pass per order. product, customer and shipping company are constant within
+-- an order (checked by a singular test), so max() just picks the single value.
+-- The dropoff reason is carried by the last event, i.e. the last stage reached.
 pivoted as (
 
     select
@@ -55,29 +44,11 @@ pivoted as (
         min(updated_at) filter (where order_status = 'created') as created_at,
         min(updated_at) filter (where order_status = 'payment') as paid_at,
         min(updated_at) filter (where order_status = 'fulfilled') as fulfilled_at,
-        max(updated_at) as last_event_at
+        max(updated_at) as last_event_at,
+        (array_agg(order_status order by updated_at desc, order_event_id desc))[1] as last_status,
+        (array_agg(dropoff_reason order by updated_at desc, order_event_id desc))[1] as dropoff_reason
     from order_events
     group by order_id
-
-),
-
--- The dropoff reason is carried by the event of the last stage reached.
-last_event as (
-
-    select
-        order_id,
-        order_status as last_status,
-        dropoff_reason
-    from (
-        select
-            *,
-            row_number() over (
-                partition by order_id
-                order by updated_at desc, order_event_id desc
-            ) as recency_rank
-        from order_events
-    ) as ranked
-    where recency_rank = 1
 
 )
 
@@ -91,17 +62,16 @@ select
     pivoted.paid_at,
     pivoted.fulfilled_at,
     pivoted.last_event_at,
-    last_event.last_status,
-    case when last_event.dropoff_reason is not null then last_event.last_status end as dropoff_stage,
-    last_event.dropoff_reason,
+    pivoted.last_status,
+    case when pivoted.dropoff_reason is not null then pivoted.last_status end as dropoff_stage,
+    pivoted.dropoff_reason,
     case
         when pivoted.fulfilled_at is not null then 'fulfilled'
-        when last_event.dropoff_reason is not null then 'dropped'
+        when pivoted.dropoff_reason is not null then 'dropped'
         else 'in_progress'
     end::text as order_outcome,
-    -- extract() returns double precision on Postgres 13: cast before rounding
-    round((extract(epoch from pivoted.paid_at - pivoted.created_at) / 3600)::numeric, 2)::numeric(10, 2) as hours_to_payment,
-    round((extract(epoch from pivoted.fulfilled_at - pivoted.paid_at) / 3600)::numeric, 2)::numeric(10, 2) as hours_to_fulfillment,
+    {{ duration_between('pivoted.created_at', 'pivoted.paid_at', 'hour') }}::numeric(10, 2) as hours_to_payment,
+    {{ duration_between('pivoted.paid_at', 'pivoted.fulfilled_at', 'hour') }}::numeric(10, 2) as hours_to_fulfillment,
     {% if is_incremental() -%}
     coalesce(existing.insert_ts, {{ audit_run_ts() }}) as insert_ts,
     {%- else -%}
@@ -109,9 +79,12 @@ select
     {%- endif %}
     {{ audit_run_ts() }} as last_update_ts
 from pivoted
-inner join last_event
-    on pivoted.order_id = last_event.order_id
 {% if is_incremental() -%}
 left join {{ this }} as existing
     on pivoted.order_id = existing.order_id
+where pivoted.last_event_at >= (
+    select coalesce(max(last_event_at), '1900-01-01'::timestamp)
+        - interval '{{ var("fct_orders_lookback_days") }} days'
+    from {{ this }}
+)
 {%- endif %}

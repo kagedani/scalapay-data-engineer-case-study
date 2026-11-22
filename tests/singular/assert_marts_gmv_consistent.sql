@@ -5,8 +5,8 @@
 with star as (
 
     select
-        sum(products.price) filter (where orders.order_outcome = 'fulfilled') as gmv,
-        sum(products.price) filter (where orders.order_outcome = 'dropped') as lost_gmv
+        {{ gmv() }} as gmv,
+        {{ gmv('dropped') }} as lost_gmv
     from {{ ref('fct_orders') }} as orders
     inner join {{ ref('dim_products') }} as products
         on orders.product_id = products.product_id

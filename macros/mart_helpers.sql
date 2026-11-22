@@ -22,7 +22,25 @@
     from {{ ref('fct_orders') }}
 {%- endmacro %}
 
-{#- Order of the subscription tiers, to tell an upgrade from a downgrade. -#}
+{#- Order of the subscription tiers (var subscription_tiers, lowest first), to tell
+    an upgrade from a downgrade. -#}
 {% macro tier_rank(column) -%}
-    case {{ column }} when 'free' then 1 when 'premium' then 2 when 'enterprise' then 3 end
+    case {{ column }}
+        {%- for tier in var('subscription_tiers') %} when '{{ tier }}' then {{ loop.index }}{% endfor %} end
+{%- endmacro %}
+
+{#- GMV: current product price summed over the orders with the given outcome
+    ('fulfilled' = GMV, 'dropped' = lost GMV). Null when no order matches. -#}
+{% macro gmv(outcome='fulfilled', price='products.price', order_outcome='orders.order_outcome') -%}
+    sum({{ price }}) filter (where {{ order_outcome }} = '{{ outcome }}')
+{%- endmacro %}
+
+{#- Ratio rounded to `scale` decimals; null when the denominator is zero. -#}
+{% macro safe_ratio(numerator, denominator, scale=4) -%}
+    round(({{ numerator }})::numeric / nullif({{ denominator }}, 0), {{ scale }})
+{%- endmacro %}
+
+{#- A quantity normalised to a 30-day exposure, so periods of different length compare. -#}
+{% macro per_30_days(quantity, exposure_days, scale) -%}
+    {{ safe_ratio(quantity ~ ' * 30', exposure_days, scale) }}
 {%- endmacro %}

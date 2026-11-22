@@ -31,7 +31,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['free', 'premium', 'enterprise']
+                values: "{{ var('subscription_tiers') }}"
       - name: updated_at
         description: Business timestamp of the event.
         data_tests: [not_null]

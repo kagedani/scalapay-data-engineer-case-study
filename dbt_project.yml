@@ -27,6 +27,9 @@ vars:
   # Minimum days a subscription period must overlap the observation window
   # to be used in tier-level comparisons (is_comparable flag).
   min_exposure_days: 30
+  # Subscription tiers, lowest first: the order tells an upgrade from a downgrade
+  # (tier_rank macro) and the list is the accepted domain of every subs_tier column.
+  subscription_tiers: ['free', 'premium', 'enterprise']
 
 # Configuring models
 models:

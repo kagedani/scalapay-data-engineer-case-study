@@ -31,7 +31,7 @@ tier_changes as (
         subs_tier,
         updated_at as valid_from
     from with_previous_tier
-    where previous_tier is null or previous_tier <> subs_tier
+    where previous_tier is distinct from subs_tier
 
 ),
 

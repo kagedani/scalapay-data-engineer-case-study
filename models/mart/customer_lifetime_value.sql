@@ -9,7 +9,7 @@ with customer_orders as (
         count(*) as orders,
         count(*) filter (where orders.order_outcome = 'fulfilled') as fulfilled_orders,
         count(*) filter (where orders.order_outcome = 'dropped') as dropped_orders,
-        sum(products.price) filter (where orders.order_outcome = 'fulfilled') as historical_clv,
+        {{ gmv() }} as historical_clv,
         min(orders.created_at) as first_order_at,
         max(orders.created_at) as last_order_at
     from {{ ref('fct_orders') }} as orders
@@ -41,7 +41,7 @@ select
     coalesce(customer_orders.fulfilled_orders, 0) as fulfilled_orders,
     coalesce(customer_orders.dropped_orders, 0) as dropped_orders,
     coalesce(customer_orders.historical_clv, 0) as historical_clv,
-    round(customer_orders.historical_clv / nullif(customer_orders.fulfilled_orders, 0), 2) as avg_fulfilled_order_value
+    {{ safe_ratio('customer_orders.historical_clv', 'customer_orders.fulfilled_orders', 2) }} as avg_fulfilled_order_value
 from {{ ref('dim_customers') }} as customers
 inner join subscription_changes
     on customers.customer_id = subscription_changes.customer_id

@@ -231,7 +231,7 @@ def chart_tiers(tiers: pd.DataFrame) -> None:
 
 def chart_dropoffs(dropoffs: pd.DataFrame) -> None:
     figure, axis = new_figure(height=3.4)
-    dropoffs = dropoffs.sort_values("dropped_orders").reset_index(drop=True)
+    dropoffs = dropoffs.sort_values(["dropped_orders", "lost_gmv"], kind="stable").reset_index(drop=True)
     labels = dropoffs["dropoff_reason"].map(REASON_LABELS)
     colors = dropoffs["dropoff_stage"].map({"created": SERIES_1, "payment": SERIES_2})
     axis.barh(labels, dropoffs["dropped_orders"], height=BAR_HEIGHT, color=colors)

@@ -18,12 +18,8 @@ periods as (
         subscriptions.customer_subscription_sk,
         subscriptions.customer_id,
         subscriptions.subs_tier,
-        lag(subscriptions.subs_tier) over (
-            partition by subscriptions.customer_id order by subscriptions.valid_from
-        ) as previous_subs_tier,
-        row_number() over (
-            partition by subscriptions.customer_id order by subscriptions.valid_from
-        ) as period_number,
+        lag(subscriptions.subs_tier) over customer_periods as previous_subs_tier,
+        row_number() over customer_periods as period_number,
         subscriptions.valid_from,
         subscriptions.valid_to,
         subscriptions.is_current,
@@ -31,6 +27,7 @@ periods as (
         least(subscriptions.valid_to, window_bounds.window_end) as exposure_end
     from {{ ref('dim_customer_subscriptions') }} as subscriptions
     cross join window_bounds
+    window customer_periods as (partition by subscriptions.customer_id order by subscriptions.valid_from)
 
 ),
 
@@ -38,7 +35,7 @@ exposed_periods as (
 
     select
         *,
-        round((extract(epoch from exposure_end - exposure_start) / 86400)::numeric, 2) as exposure_days
+        {{ duration_between('exposure_start', 'exposure_end', 'day') }} as exposure_days
     from periods
     where exposure_end > exposure_start
 
@@ -50,7 +47,7 @@ period_orders as (
         subscriptions.customer_subscription_sk,
         count(*) as orders,
         count(*) filter (where orders.order_outcome = 'fulfilled') as fulfilled_orders,
-        sum(products.price) filter (where orders.order_outcome = 'fulfilled') as gmv
+        {{ gmv() }} as gmv
     from {{ ref('fct_orders') }} as orders
     {{ join_subscription_at_order_time('orders', 'subscriptions') }}
     inner join {{ ref('dim_products') }} as products
@@ -80,8 +77,8 @@ select
     coalesce(period_orders.orders, 0) as orders,
     coalesce(period_orders.fulfilled_orders, 0) as fulfilled_orders,
     coalesce(period_orders.gmv, 0) as gmv,
-    round(coalesce(period_orders.orders, 0) * 30 / exposure_days, 4) as orders_per_30_days,
-    round(coalesce(period_orders.gmv, 0) * 30 / exposure_days, 2) as gmv_per_30_days
+    {{ per_30_days('coalesce(period_orders.orders, 0)', 'exposed_periods.exposure_days', 4) }} as orders_per_30_days,
+    {{ per_30_days('coalesce(period_orders.gmv, 0)', 'exposed_periods.exposure_days', 2) }} as gmv_per_30_days
 from exposed_periods
 left join period_orders
     on exposed_periods.customer_subscription_sk = period_orders.customer_subscription_sk

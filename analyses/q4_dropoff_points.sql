@@ -9,4 +9,4 @@ select
     sum(lost_gmv) as lost_gmv
 from {{ ref('dropoff_analysis') }}
 group by dropoff_stage, dropoff_reason
-order by dropped_orders desc
+order by dropped_orders desc, lost_gmv desc

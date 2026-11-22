@@ -31,7 +31,7 @@ tier_orders as (
         count(*) filter (where dropoff_reason = 'customer_abandoned') as customer_abandoned_orders,
         count(*) filter (where dropoff_reason = 'inventory_shortage') as inventory_shortage_orders,
         count(*) filter (where dropoff_reason = 'lost_in_shipping') as lost_in_shipping_orders,
-        coalesce(sum(price) filter (where order_outcome = 'fulfilled'), 0) as gmv,
+        coalesce({{ gmv(price='price', order_outcome='order_outcome') }}, 0) as gmv,
         round(avg(price) filter (where order_outcome = 'fulfilled'), 2) as avg_fulfilled_order_value
     from orders
     group by subs_tier
@@ -59,9 +59,9 @@ select
     tier_orders.orders,
     tier_orders.paid_orders,
     tier_orders.fulfilled_orders,
-    round(tier_orders.paid_orders::numeric / tier_orders.orders, 4) as payment_rate,
-    round(tier_orders.fulfilled_orders::numeric / nullif(tier_orders.paid_orders, 0), 4) as fulfillment_rate,
-    round(tier_orders.fulfilled_orders::numeric / tier_orders.orders, 4) as overall_conversion_rate,
+    {{ safe_ratio('tier_orders.paid_orders', 'tier_orders.orders') }} as payment_rate,
+    {{ safe_ratio('tier_orders.fulfilled_orders', 'tier_orders.paid_orders') }} as fulfillment_rate,
+    {{ safe_ratio('tier_orders.fulfilled_orders', 'tier_orders.orders') }} as overall_conversion_rate,
     tier_orders.card_declined_orders,
     tier_orders.customer_abandoned_orders,
     tier_orders.inventory_shortage_orders,
@@ -70,8 +70,8 @@ select
     tier_orders.avg_fulfilled_order_value,
     coalesce(tier_exposure.comparable_periods, 0) as comparable_periods,
     tier_exposure.comparable_exposure_days,
-    round(tier_exposure.comparable_orders * 30 / nullif(tier_exposure.comparable_exposure_days, 0), 4) as orders_per_30_days,
-    round(tier_exposure.comparable_gmv * 30 / nullif(tier_exposure.comparable_exposure_days, 0), 2) as gmv_per_30_days
+    {{ per_30_days('tier_exposure.comparable_orders', 'tier_exposure.comparable_exposure_days', 4) }} as orders_per_30_days,
+    {{ per_30_days('tier_exposure.comparable_gmv', 'tier_exposure.comparable_exposure_days', 2) }} as gmv_per_30_days
 from tier_orders
 left join tier_exposure
     on tier_orders.subs_tier = tier_exposure.subs_tier
