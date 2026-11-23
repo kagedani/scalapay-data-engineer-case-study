@@ -2,7 +2,15 @@
 set -e
 
 echo "Waiting for PostgreSQL to be ready..."
+attempts=0
 until dbt debug > /dev/null 2>&1; do
+  attempts=$((attempts + 1))
+  if [ "$attempts" -ge 60 ]; then
+    # Not always the database: dbt debug also fails on config or file permissions.
+    echo "dbt debug still failing after 2 minutes:"
+    dbt debug || true
+    exit 1
+  fi
   echo "PostgreSQL is unavailable - sleeping"
   sleep 2
 done
@@ -20,10 +28,7 @@ echo "Loading seed data..."
 dbt seed
 
 echo "DBT environment is ready!"
-echo "You can now run DBT commands like:"
-echo "  dbt run    - Run your models"
-echo "  dbt test   - Run tests"
-echo "  dbt docs generate && dbt docs serve --host 0.0.0.0 - Generate and serve docs"
+echo "From the host: make build, make insights, make docs (see make help)."
 echo ""
 
 # Execute the command passed to the container (or bash if none)
