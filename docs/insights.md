@@ -2,14 +2,15 @@
 
 Analysis of 1,000 orders created between 6 March and 4 September 2025 by 200
 customers. Every number below comes from a query in [`analyses/`](../analyses)
-that reads the mart layer; the charts are rendered from the same queries by
-[`scripts/insights_charts.py`](../scripts/insights_charts.py).
+that reads the mart layer.
+[`scripts/insights_charts.py`](../scripts/insights_charts.py) renders the charts
+from the same queries.
 
 ## Executive summary
 
-- **86.7% of created orders are fulfilled.** 8.4% are lost before payment and a
-  further 5.3% of paid orders are lost after it. Conversion is flat at 86–90% in
-  every full month.
+- **86.7% of created orders are fulfilled.** The funnel loses 8.4% before payment
+  and 5.3% of paid orders after it. Conversion is flat at 86–90% in every full
+  month.
 - **Card declines cause 32% of all dropoffs** (42 orders, 4.2% of created
   orders), level with customers abandoning checkout. Together they make up two
   thirds of the losses.
@@ -46,7 +47,7 @@ trend. The two partial months at the edges of the window need a caveat:
   reached a final state (no order is still in progress), and the 17 dropoffs are
   spread over all four reasons: 6 card declines, 5 abandonments, 5 lost in
   shipping, 1 inventory shortage. With no single cause and only four days of
-  data, I read this as noise or an artefact of how the extract was cut, not as
+  data, I read this as noise or a side effect of where the extract ends, not as
   an incident. It is the first thing I would check with the data owner.
 
 ## 2. Product categories by order volume
@@ -71,16 +72,16 @@ Query: `q2_category_volumes.sql` on `mart.category_performance`.
   average against 37 for a lost Book.
 - **Clothing and Toys convert worst** (81% and 84%). Clothing also loses the
   second-highest value, 3.9K.
-- Sports is not among the categories listed in the case-study brief but is in
-  the data. Undefined groups two products with no category in the source; they
-  are worth 5.2K of GMV, enough to be worth fixing upstream.
+- The case-study brief does not list Sports, but the data has it. Undefined
+  groups two products with no category in the source; they carry 5.2K of GMV,
+  enough to justify a fix upstream.
 
 ## 3. Effect of subscription tiers on customer behaviour
 
 Query: `q3_tier_behavior.sql` on `mart.tier_behavior`.
 
-Each order is assigned the tier the customer held **when the order was
-created**, not the current tier. Rates per 30 days divide orders and GMV by the
+Each order carries the tier the customer held **when they created it**, not
+the current tier. Rates per 30 days divide orders and GMV by the
 days each subscription period overlaps the observation window, and only use
 periods with at least 30 days of overlap, so short periods do not distort the
 averages.
@@ -109,7 +110,9 @@ points:
   it mixes orders placed under earlier tiers, and is context only.
 
 The data cannot say whether a tier *causes* a behaviour: customers choose their
-tier, and the observation window is six months. Only 13 upgrades have at least 30 days of data on both sides, too few to compare behaviour before and after upgrading.
+tier, and the observation window is six months. Only 13 upgrades have at least
+30 days of data on both sides, too few to compare behaviour before and after
+upgrading.
 
 ## 4. Main dropoff points
 
@@ -130,9 +133,10 @@ are equally frequent. Abandoned orders are worth more on average (127 against
 105), which suggests customers hesitate more on expensive items.
 
 **After payment (37% of dropoffs).** These orders are worse for the business:
-the customer has paid, so each one needs a refund and damages trust.
+the customer has paid, so each one costs a refund and some of the customer's
+trust.
 
-- **Lost in shipping** depends heavily on the carrier:
+- **Lost in shipping** depends on the carrier:
 
   ![Carriers](img/carriers.png)
 
@@ -141,9 +145,9 @@ the customer has paid, so each one needs a refund and damages trust.
   Losses are not tied to speed: LaserShip is among the fastest (24 hours median
   from payment to fulfilment) and still loses 6.5%. USPS Priority is both slow
   (83 hours) and the worst on losses. Amazon and DHL are best on both.
-- **Inventory shortage** (15 orders) is an order accepted and paid for an item
-  that was not in stock: a stock check before payment would turn it into a
-  visible out-of-stock instead of a refund.
+- **Inventory shortage** (15 orders) means the customer paid for an item that
+  was out of stock. A stock check before payment would show an out-of-stock
+  message instead of issuing a refund.
 
 ## Recommendations
 
@@ -162,14 +166,14 @@ the customer has paid, so each one needs a refund and damages trust.
    worst, starting from the checkout steps where customers leave (not tracked in
    this data).
 5. **Do not sell tiers on behaviour change.** The data shows no ordering uplift
-   from premium or enterprise; their value has to come from elsewhere.
+   from premium or enterprise; their case has to rest on other benefits.
 6. **Fix the two products without a category** and confirm September with the
    data owner before using the latest month in any reporting.
 
 ## Data limitations
 
-- **Short window.** Six months, with partial first and last months. Seasonality
-  and long-term retention cannot be measured.
+- **Short window.** Six months, with partial first and last months. You cannot
+  measure seasonality or long-term retention.
 - **Small samples.** 99 enterprise orders, 23 enterprise customers, carrier
   losses in single digits. Differences of a few points are not significant.
 - **GMV uses current prices.** The product file has no price history and no
