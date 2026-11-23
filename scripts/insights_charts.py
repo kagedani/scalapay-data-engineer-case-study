@@ -3,9 +3,13 @@
 Each chart reads one query of analyses/, compiled by dbt, so the numbers in the
 charts are the answers to the case-study questions as written in SQL.
 
-Run inside the dbt container after `dbt build` and `dbt compile`:
+From the host, after a build:
 
-    python scripts/insights_charts.py
+    make insights
+
+That target runs `dbt compile --select path:analyses`, then this script inside
+the dbt container. Connection settings come from PGHOST, PGPORT, PGDATABASE,
+PGUSER and PGPASSWORD, with the docker-compose values as defaults.
 """
 
 import os

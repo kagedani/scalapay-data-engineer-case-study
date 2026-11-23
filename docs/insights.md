@@ -172,8 +172,10 @@ the customer has paid, so each one needs a refund and damages trust.
   and long-term retention cannot be measured.
 - **Small samples.** 99 enterprise orders, 23 enterprise customers, carrier
   losses in single digits. Differences of a few points are not significant.
-- **GMV uses current prices.** The product file has no price history, so GMV and
-  lost GMV value every order at today's price.
+- **GMV uses current prices.** The product file has no price history and no
+  timestamp, so GMV and lost GMV value every order at today's price. A price
+  change rewrites past GMV, and you cannot reproduce last month's figures. The
+  README describes the fix.
 - **Historical lifetime value only.** CLV is the GMV each customer has already
   generated, within the window.
 - **No checkout steps.** "Customer abandoned" has no detail on where or why.
