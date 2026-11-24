@@ -10,7 +10,7 @@ with dropoffs_not_on_last_event as (
         select
             order_id,
             dropoff_reason,
-            row_number() over (partition by order_id order by updated_at desc) as recency_rank
+            row_number() over (partition by order_id order by updated_at desc, order_event_id desc) as recency_rank
         from {{ ref('stg_orders') }}
     ) as ranked
     where dropoff_reason is not null
