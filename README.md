@@ -148,7 +148,9 @@ fact would block that. Marts have no contracts; uniqueness tests cover their
 grain.
 
 **Tests by layer.** Tests on raw sources warn: they describe data you do not
-control. From staging onwards a failing test stops the build.
+control. From staging onwards a failing test stops the build, with one
+exception: the `accepted_values` test on `stg_orders.dropoff_reason` warns,
+because the source field is free text and a new reason is legitimate.
 
 **Alternative I considered: customer events as a fact.** A
 `fct_subscription_changes` table with a type 1 `dim_customers` would serve
@@ -309,7 +311,8 @@ Compact reference. Open the linked files for detail only when the task needs it.
 
 - `data_tests:`, never `tests:`. Test arguments go under `arguments:`;
   `config: severity:` sits at the same level.
-- YAML per layer is named `_<layer>.yml`. Sources warn, everything else errors.
+- YAML per layer is named `_<layer>.yml`. Sources warn, everything else errors,
+  except `accepted_values` on `stg_orders.dropoff_reason`.
 - Star tables carry `insert_ts` and `last_update_ts` from `audit_run_ts()`;
   marts do not.
 - Use Conventional Commits, one commit per logical change.

@@ -1,8 +1,10 @@
 # Order funnel insights
 
 Analysis of 1,000 orders created between 6 March and 4 September 2025 by 200
-customers. Every number below comes from a query in [`analyses/`](../analyses)
-that reads the mart layer.
+customers. Every table and chart below comes from a query in
+[`analyses/`](../analyses) that reads the mart layer; the few context figures
+outside them (customer count, total created value, CLV by tier, upgrades) come
+from the same marts.
 [`scripts/insights_charts.py`](../scripts/insights_charts.py) renders the charts
 from the same queries.
 
@@ -20,7 +22,7 @@ from the same queries.
   orders in shipping and Amazon Logistics 1.5%. The gap between subscription
   tiers is under 5 percentage points on every metric.
 - **Home & Garden has the most orders, Electronics the most value**: 254 orders
-  against 155, but 44.7K of GMV against 28.6K.
+  against 155, but 28.6K of GMV against 44.7K.
 
 ## 1. Conversion from creation to fulfillment
 
