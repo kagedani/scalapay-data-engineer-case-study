@@ -28,9 +28,18 @@ tiers and dropoffs.
 
 You need Docker and Make.
 
-1. Copy the four source files into `data/` (git ignores them):
-   `data/customers.csv`, `data/orders.csv`, `data/products.csv`,
-   `data/shipping_company.csv`.
+1. Copy the four source files of the case study into the `data/` folder at the
+   repo root. The folder comes with the clone; git ignores the CSV files, so you
+   add them yourself. Keep these exact names:
+
+   ```
+   data/customers.csv
+   data/orders.csv
+   data/products.csv
+   data/shipping_company.csv
+   ```
+
+   `make start` checks for them and lists any missing file before it starts.
 2. Run `make start`. It builds the image, starts Postgres and dbt, installs the
    dbt packages and loads the CSV files into the `raw_data` schema with
    `dbt seed`. The container reloads them on every start.
@@ -268,6 +277,10 @@ Compact reference. Open the linked files for detail only when the task needs it.
 
 - Postgres 13 and dbt-core 1.10.10 run in Docker. `make start` returns after
   `Environment is ready!`.
+- Before `make start`, check that `data/` holds `customers.csv`, `orders.csv`,
+  `products.csv` and `shipping_company.csv`. If any is missing, stop and ask the
+  user to copy the case-study files there. Do not create, download or invent
+  them.
 - Run commands from the repo root on the host. Every target except `shell` and
   `docs` runs without a TTY.
 - `make build [SELECT="<selector>"] [VARS="<yaml>"]`, `make insights`,
