@@ -9,7 +9,7 @@ select
     count(orders.fulfilled_at) as fulfilled_orders,
     count(*) filter (where orders.dropoff_reason = 'lost_in_shipping') as lost_in_shipping_orders,
     {{ safe_ratio("count(*) filter (where orders.dropoff_reason = 'lost_in_shipping')", 'count(orders.paid_at)') }} as lost_in_shipping_rate,
-    coalesce(sum(products.price) filter (where orders.dropoff_reason = 'lost_in_shipping'), 0) as lost_in_shipping_gmv,
+    coalesce({{ gmv('dropped', condition="orders.dropoff_reason = 'lost_in_shipping'") }}, 0) as lost_in_shipping_gmv,
     round(avg(orders.hours_to_fulfillment), 2) as avg_hours_to_fulfillment,
     round((percentile_cont(0.5) within group (order by orders.hours_to_fulfillment))::numeric, 2) as median_hours_to_fulfillment,
     round((percentile_cont(0.9) within group (order by orders.hours_to_fulfillment))::numeric, 2) as p90_hours_to_fulfillment

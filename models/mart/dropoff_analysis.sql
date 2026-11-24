@@ -11,7 +11,7 @@ select
     products.category,
     shipping.shipping_company_name,
     count(*) as dropped_orders,
-    sum(products.price) as lost_gmv
+    {{ gmv('dropped') }} as lost_gmv
 from {{ ref('fct_orders') }} as orders
 {{ join_subscription_at_order_time('orders', 'subscriptions') }}
 inner join {{ ref('dim_products') }} as products

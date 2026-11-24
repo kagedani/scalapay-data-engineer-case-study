@@ -30,9 +30,10 @@
 {%- endmacro %}
 
 {#- GMV: current product price summed over the orders with the given outcome
-    ('fulfilled' = GMV, 'dropped' = lost GMV). Null when no order matches. -#}
-{% macro gmv(outcome='fulfilled', price='products.price', order_outcome='orders.order_outcome') -%}
-    sum({{ price }}) filter (where {{ order_outcome }} = '{{ outcome }}')
+    ('fulfilled' = GMV, 'dropped' = lost GMV). `condition` narrows the orders
+    further (e.g. one dropoff reason). Null when no order matches. -#}
+{% macro gmv(outcome='fulfilled', price='products.price', order_outcome='orders.order_outcome', condition=none) -%}
+    sum({{ price }}) filter (where {{ order_outcome }} = '{{ outcome }}'{% if condition %} and ({{ condition }}){% endif %})
 {%- endmacro %}
 
 {#- Ratio rounded to `scale` decimals; null when the denominator is zero. -#}
