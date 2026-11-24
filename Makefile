@@ -1,5 +1,5 @@
 .PHONY: help start shell logs stop clean test-environment build full-refresh docs insights all \
-	start-containers containers-running ensure-running
+	start-containers containers-running ensure-running check-data
 
 # Containers run as the host user, so files written to the mounted project are not owned by root.
 export HOST_UID := $(shell id -u 2>/dev/null || echo 0)
@@ -73,7 +73,18 @@ ensure-running:
 		$(MAKE) --no-print-directory start-containers; \
 	fi
 
-start-containers:
+DATA_FILES := customers orders products shipping_company
+
+check-data:
+	@missing=""; \
+	for f in $(DATA_FILES); do [ -f "data/$$f.csv" ] || missing="$$missing data/$$f.csv"; done; \
+	if [ -n "$$missing" ]; then \
+		echo "Missing source files:$$missing"; \
+		echo "Copy the four case-study CSV files into data/ (see README, Run it), then run make start again."; \
+		exit 1; \
+	fi
+
+start-containers: check-data
 	@echo "Starting DBT case study environment..."
 	@since=$$(date -u +%Y-%m-%dT%H:%M:%SZ); \
 	docker compose up --build -d && \
