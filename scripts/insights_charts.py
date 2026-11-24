@@ -57,6 +57,10 @@ def category_label(category: str) -> str:
     return CATEGORY_LABELS.get(category, category.capitalize())
 
 
+def reason_label(reason: str) -> str:
+    return REASON_LABELS.get(reason, reason.replace("_", " ").capitalize())
+
+
 def compact(value: float) -> str:
     return f"{value / 1000:.1f}K" if abs(value) >= 1000 else f"{value:,.0f}"
 
@@ -236,7 +240,7 @@ def chart_tiers(tiers: pd.DataFrame) -> None:
 def chart_dropoffs(dropoffs: pd.DataFrame) -> None:
     figure, axis = new_figure(height=3.4)
     dropoffs = dropoffs.sort_values(["dropped_orders", "lost_gmv"], kind="stable").reset_index(drop=True)
-    labels = dropoffs["dropoff_reason"].map(REASON_LABELS)
+    labels = dropoffs["dropoff_reason"].map(reason_label)
     colors = dropoffs["dropoff_stage"].map({"created": SERIES_1, "payment": SERIES_2})
     axis.barh(labels, dropoffs["dropped_orders"], height=BAR_HEIGHT, color=colors)
     texts = [
